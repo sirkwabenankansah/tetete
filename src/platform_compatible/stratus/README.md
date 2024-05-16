@@ -30,3 +30,6 @@ C:\USERS\SIRKW\ONEDRIVE\DOCUMENTS\TETETE\SRC\PLATFORM_COMPATIBLE\STRATUS
         platform.yml
 
 ```
+
+# Running the Make file step by step 
+```

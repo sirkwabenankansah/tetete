@@ -1,0 +1,148 @@
+###############################################################################
+# Subnet CIDRs
+#
+# Define how the VPC CIDR will be chuncked into subnets and the AZ of each.
+# These aliases are defined here to be used in the subnet definitions and
+# instance definitions.
+#
+SUBNET_CIDR_PREFIX: "{{ (VPC_CIDR_PREFIX | int) + 2 }}"
+PRIVATE_CIDR_1: "{{ VPC_CIDR | ipsubnet(SUBNET_CIDR_PREFIX, 0) }}"
+PRIVATE_AZ_1: "{{ region }}a"
+PRIVATE_CIDR_2: "{{ VPC_CIDR | ipsubnet(SUBNET_CIDR_PREFIX, 1) }}"
+PRIVATE_AZ_2: "{{ region }}b"
+MGMT_CIDR_1: "{{ VPC_CIDR | ipsubnet(SUBNET_CIDR_PREFIX, 2) }}"
+MGMT_AZ_1: "{{ region }}a"
+MGMT_CIDR_2: "{{ VPC_CIDR | ipsubnet(SUBNET_CIDR_PREFIX, 3) }}"
+MGMT_AZ_2: "{{ region }}b"
+
+###############################################################################
+# Subnet Definitions
+# List of subnet definitions following the format in examples below.
+# Use the Subnet CIDR and AZ aliases from above to stay consistent with the
+# instance definitions below.
+VPC_SUBNETS_DEFINITIONS:
+  - cidr: "{{ PRIVATE_CIDR_1 }}" # Private Subnet-1
+    az: "{{ PRIVATE_AZ_1 }}"
+    resource_tags:
+      Name: "{{ VPC_NAME }}-{{ PRIVATE_AZ_1 }}-private-subnet-1"
+      Type: "Private"
+      Alias: "Private_Subnet_1"
+  - cidr: "{{ PRIVATE_CIDR_2 }}" # Private Subnet-2
+    az: "{{ PRIVATE_AZ_2 }}"
+    resource_tags:
+      Name: "{{ VPC_NAME }}-{{ PRIVATE_AZ_2 }}-private-subnet-2"
+      Type: "Private"
+      Alias: "Private_Subnet_2"
+  - cidr: "{{ MGMT_CIDR_1 }}" # mgmt Subnet-1
+    az: "{{ MGMT_AZ_1 }}"
+    resource_tags:
+      Name: "{{ VPC_NAME }}-{{ MGMT_AZ_1 }}-mgmt-subnet-1"
+      Type: "mgmt"
+      Alias: "mgmt_Subnet_1"
+  - cidr: "{{ MGMT_CIDR_2 }}" # mgmt Subnet-2
+    az: "{{ MGMT_AZ_2 }}"
+    resource_tags:
+      Name: "{{ VPC_NAME }}-{{ MGMT_AZ_2 }}-mgmt-subnet-2"
+      Type: "mgmt"
+      Alias: "MGMT_Subnet_2"
+
+VPC_SUBNETS: "{{ VPC_SUBNETS_DEFINITIONS }}" # This allows create_wksp_vars.sh to sed VPC_SUBNETS
+
+###############################################################################
+# User-Data Templates
+#
+# Some example cloud-init user-data for setting the initial password
+RHEL_USER_DATA:
+  common: |
+    #cloud-config
+    # Enable password auth. No easy way to enable key auth from guac
+    # Per https://cloudinit.readthedocs.io/en/latest/topics/modules.html#set-passwords
+    ssh_pwauth: yes
+    chpasswd:
+      expire: false
+      list:
+        - {{ platform_name | default('fences') }}-user:{{ initial_password | password_hash('sha512') }}
+    write_files:
+      - path: /etc/yum.repos.d/redhat-rhui.repo
+        content: |
+          # This file has been blanked out to defer to custom repositories.
+        permissions: '0644'
+      - path: /etc/yum.repos.d/redhat-rhui-client-config.repo
+        content: |
+          # This file has been blanked out to defer to custom repositories.
+        permissions: '0644'
+    {% if fences_yum_client_repo_list is defined and fences_yum_client_repo_list | length > 0 -%}
+    yum_repos:
+      # The name of the repository
+      {% for repo in fences_yum_client_repo_list -%}
+      {{ repo }}:
+        baseurl:
+          {% for yum_server in fences_yum_host_list -%}
+          - http://{{ yum_server }}/upstream/{{ repo }}
+          {% endfor -%}
+        enabled: true
+        failovermethod: roundrobin
+        gpgcheck: no
+        name: Fences - {{ repo }}
+      {% endfor -%}
+    {% endif -%}
+    packages:
+      - git
+      - tmux
+      - bash-completion
+      - podman
+  bastion: |
+    runcmd:
+      - [ fips-mode-setup, --disable ]
+      # This is so the instance can know which s3 bucket contains the fences.yml configuration file
+      - [ sh, -c, 'echo export S3_BUCKET={{ PROJECT }}-{{ env }}-s3-{{ S3_BUCKET_UUID | default('placeholder') }} >> /etc/profile.d/project_env_vars.sh']
+      - [ sh, -c, 'echo export S3_BUCKET={{ PROJECT }}-{{ env }}-s3-{{ S3_BUCKET_UUID | default('placeholder') }} >> /etc/profile.d/project_env_vars.csh']
+      # Resize the filesystems on first boot
+      - [ /usr/local/bin/grow-lvm-pvs.sh ]
+      - [ /sbin/lvresize, -r, -L, +10G, /dev/vg.main/lv.home ]
+      - [ /sbin/lvresize, -r, -l, +100%FREE, /dev/vg.main/lv.var ]
+      # Enable terraform inside a container
+      - [ /sbin/setsebool, domain_kernel_load_modules=1 ]
+    disk_setup:
+      /dev/nvme1n1:
+        table_type: gpt
+        layout: true
+        overwrite: false
+    fs_setup:
+      - label: srv
+        filesystem: xfs
+        device: /dev/nvme1n1p1
+    mounts:
+      - [ /dev/nvme1n1p1, /srv, xfs, "defaults,exec", "0", "2" ]
+
+SECURITY_GROUPS_DEFINITIONS: []
+
+SECURITY_GROUPS: "{{ SECURITY_GROUPS_DEFINITIONS }}" # This allows create_wksp_vars.sh to sed SECURITY_GROUPS
+
+###############################################################################
+# EC2 Instance Definitions
+#
+EC2_INSTANCES_DEFINITIONS:
+  # Servers to be created by ansible
+  - name: "{{ VPC_NAME }}-mgmt-bastion"
+    instance_type: "t3.medium"
+    instance_profile_name: "{{ VPC_NAME }}-iam-role-ec2-workload-manager-v2"
+    private_ip: "{{ PRIVATE_CIDR_1 | next_nth_usable(8) }}"
+    image_id: "{{ current_stig_rhel8_ami }}"
+    group:
+      - "{{ VPC_NAME }}-sg-fences-default"
+    volumes:
+      - device_name: /dev/sda1
+        delete_on_termination: true
+        volume_type: gp2
+        volume_size: 50
+      - device_name: /dev/sdb
+        delete_on_termination: true
+        volume_type: gp2
+        volume_size: 500
+    user_data: |
+      {{ RHEL_USER_DATA.common }}
+      {{ RHEL_USER_DATA.bastion }}
+    tags:
+      Role: bastions
+      Hostname: bastion01

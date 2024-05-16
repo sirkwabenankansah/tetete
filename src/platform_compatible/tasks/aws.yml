@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 
+---
+- name: Create policies
+  iam_managed_policy:
+    state: present
+    policy_name: '{{ entry.name }}'
+    policy: '{{ entry.policy }}'
+    region: '{{ region }}'
+  loop:
+    - name: "{{ VPC_NAME }}-iam-policy-orchestrator"
+      policy: '{{ lookup("template", "orchestrator-iam-policy.json.j2") }}'
+  loop_control:
+    loop_var: entry
+
+- name: Create roles
+  iam_role:
+    name: '{{ entry.name }}'
+    assume_role_policy_document: '{{ entry.assume_role_policy_document }}'
+    managed_policies: '{{ entry.policies }}'
+    region: '{{ region }}'
+  loop:
+    - name: workload-{{ VPC_NAME }}-iam-role-ec2-orchestrator
+      assume_role_policy_document: '{{ lookup("template", "ec2_assume_role_policy.json.j2") }}'
+      policies:
+        - "{{ VPC_NAME }}-iam-policy-orchestrator"
+        - "{{ VPC_NAME }}-iam-policy-workload-overlay-conditions"
+  loop_control:
+    loop_var: entry
+
+- name: Update bastion IAM role
+  ec2_instance:
+    region: "{{ region }}"
+    instance_role: "workload-{{ VPC_NAME }}-iam-role-ec2-orchestrator"
+    filters:
+      private-ip-address: "{{ PRIVATE_CIDR_1 | next_nth_usable(8) }}"
+      vpc-id: "{{ VPC_ID }}"

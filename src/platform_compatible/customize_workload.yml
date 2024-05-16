@@ -1,0 +1,148 @@
+#
+#
+
+---
+# This playbook configures a workload for P1 BigBang deployment
+- name: Prompt for, validate, and store the customer/project name
+  hosts: all, localhost # Ensure that this task always runs
+  tags: always
+  run_once: yes # But only once
+  gather_facts: no
+  vars: # Overridable run params
+    host_limit_filter: "&vpcs" # Can be specified externally
+    limited_hosts_var: target_hosts # Name of var to store target host list
+    require_single_target: yes
+  vars_prompt: # These can be specified on the command line with `-e target_project=customerXXXX`
+    - name: target_project
+      prompt: Enter the target project/workload name (e.g. customer0000)
+      private: no
+  tasks:
+    - name: Validate and store the chosen target_project
+      delegate_to: localhost # Workaround: https://github.com/ansible/ansible/issues/62220
+      block:
+        - name: Is this a valid project name?
+          assert:
+            that: target_project in groups.keys()
+            msg: The project must exist in the inventory
+        - name: Is the target location for the project vars valid?
+          block:
+            - name: Check target path
+              delegate_to: localhost # Redundant with workaround, but explicit
+              stat:
+                path: "{{ ansible_base_path }}/environments/{{ env }}/group_vars/{{ target_project }}/"
+              register: project_dir_stat
+            - name: Must be a directory
+              assert:
+                that: project_dir_stat.stat.exists and project_dir_stat.stat.isdir
+        - name: Set hostvars.localhost.target_project for easy reference later
+          # The vars_prompt vars do not survive beyond the current play.
+          # Explicitly, intentionally saving to localhost so that we can find it later
+          delegate_to: localhost
+          delegate_facts: true
+          set_fact:
+            # use default() to stop lazy eval / recursive loop
+            target_project: '{{ target_project | default("") }}'
+            target_component: '{{ target_component | default("") }}'
+    - name: Save targeted hosts
+      set_fact:
+        targeted_hosts: '{{ lookup("inventory_hostnames", full_limit_filter) }}'
+      vars:
+        full_limit_filter: '{{ target_project + (host_limit_filter | ternary(":" + host_limit_filter, "")) }}'
+    - name: Ensure targeted hosts are more than one
+      assert:
+        that:
+          - targeted_hosts | length > 0
+        fail_msg: Unable to find a valid host. This indicates the pseudo_hosts.yml is missing.
+    - name: Set hostvars.localhost.{{ limited_hosts_var }}, for easy reference later
+      delegate_to: localhost
+      delegate_facts: yes
+      set_fact:
+        "{{ limited_hosts_var }}": '{{ targeted_hosts.split(",") }}'
+    - name: Limited target hosts
+      debug:
+        var: '{{ "hostvars.localhost." + limited_hosts_var }}'
+    - name: For safety, ensure we target a single host at a time
+      assert:
+        that: hostvars.localhost[limited_hosts_var] | length == 1
+        msg: |
+          You must limit this playbook to one target host.
+          Use `require_single_target=no` to override.
+      when: require_single_target | bool
+
+- name: Customize workload AWS resources
+  hosts: '{{ hostvars.localhost.target_hosts | join(",") }}'
+  gather_facts: no
+  environment: "{{ aws_env_vars | default( dict() ) }}" # Required by assume_role
+  tasks:
+    - name: Ensure required variables are defined
+      assert:
+        that:
+          - s3_log_bucket_name is defined
+          - aws_partition is defined
+          - region is defined
+          - account_number is defined
+          - KMS_KEY_ID is defined
+          - PROJECT is defined
+          - env is defined
+          - (master_account_number is defined and master_account_number != account_number) or (_force_customization | default(false) | bool)
+        fail_msg: "This plaYbook is intended to be run from the platform ansible instance for a specific customer."
+    - name: Import existing configurations synced between the platform and workloads
+      include_vars:
+        file: "platform.yml"
+    # This role is in the platform repository
+    - name: Assume the ansible role of target account
+      import_role:
+        name: assume_role
+    - name: Configure custom AWS resources
+      import_tasks: "tasks/aws.yml" # must use include with variable file names
+
+    - name: Re-Import existing configurations synced between the platform and workloads
+      include_vars:
+        file: "platform.yml"
+        name: platform_info
+    - name: Create new info to merge with existing
+      set_fact:
+        platform_info: "{{ platform_info | default({}) | combine(new_info, recursive=true) }}"
+      vars:
+        new_info:
+          platform_account_number: "{{ master_account_number }}"
+          env: "{{ env }}"
+    # At this point we should have all of the information we need available
+    # Fancy code to create a nested dictionary
+    # From https://stackoverflow.com/a/68835669/19139981
+    - name: Update configuration file synced between the platform and workloads
+      vars:
+        component_info: >-
+          {%- set component_info = {
+            hostvars.localhost.target_component: {
+              "account_number": account_number,
+              "workload_id": WORKLOAD_ID,
+              "name": VPC_NAME,
+              "initial_password": initial_password,
+              "s3_bucket_uuid": S3_BUCKET_UUID,
+              "kms_key_id": KMS_KEY_ID,
+            }
+          } -%}
+          {{ component_info }}
+      set_fact:
+        platform_info: "{{ platform_info | default({}) | combine(component_info, recursive=true) }}"
+
+    - name: Save information
+      vars:
+        yaml_output_style: '"' # this ensures passwords are wrapped in quotes
+      copy:
+        dest: "vars/platform.yml"
+        content: "{{ platform_info | to_nice_yaml(indent=2, explicit_start=True, default_style=yaml_output_style) }}"
+        mode: "0640"
+
+    - name: Upload configuration file to s3
+      aws_s3:
+        bucket: "{{ VPC_NAME }}-s3-{{ S3_BUCKET_UUID }}"
+        object: "configuration/platform.yml"
+        src: "vars/platform.yml"
+        mode: put
+        region: "{{ region }}"
+        encryption_mode: "aws:kms"
+        encryption_kms_key_id: "{{ KMS_KEY_ID }}"
+        permission: []
+

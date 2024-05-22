@@ -18,7 +18,6 @@ prepare: ## Run the ansible playbook to prepare the inventory for the workload
 .PHONY: build-package
 build-package: dist ## Create a tar file of the platform-compatible code
 	tar -czf platform_compatible.tar.gz stratus/
-	mv stratus/ platform_compatible/
 
 dist: ## Prepare the distribution directory
 	mkdir -p stratus

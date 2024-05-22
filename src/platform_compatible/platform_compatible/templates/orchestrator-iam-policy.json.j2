@@ -1,0 +1,242 @@
+{
+  "version"："2012-10-17"，
+  "Statement": [
+    {
+    "Sid": "AllowRDSManagement"
+    "Effect": "Allow"
+    "Action": [
+    "rds:AddTagsToResource",
+    "rds:CreateDBInstance",
+    "rds:CreateDBSubnetGroup",
+    "rds:DeleteDBInstance",
+    "rds:DescribeDBInstances",
+    "rds:DescribeDBSubnetGroups",
+    "rds:ListTagsForResource",
+    "rds:ModifyDBInstance",
+    "rds:ModifyDBSubnetGroup"
+    ],
+    "Resource": "arn: {{ aws_partition }}:rds:*iff account_number }} :db:**
+    "Condition": {
+    "Bool": {
+        "rds: StorageEncrypted": true
+         }
+        }
+    },
+    {
+    "Effect": "Allow",
+    "Action": [
+    "kms:Decrypt",
+    "kms:Encrypt",
+    "kms:ListGrants" ,
+    "kms:GenerateDataKey*",
+    "kms:RevokeGrant",
+    "kms:ReEncrypt*"
+    ],
+    "Resource": "arn: {{ aws_partition }}: kms:*: {{ account_number }}:key/*",
+    },
+    {
+    "Sid": "AllowAMIManagement",
+    "Effect": "Allow",
+    "Action": [
+    "ec2:AttachVolume"
+    "ec2:AuthorizeSecurityGroupIngress",
+    "ec2:Copy Image",
+    "ec2:CreateSecurityGroup",
+    "ec2:CreateSnapshot",
+    "ec2:CreateVolume",
+    "ec2:DeleteSecurityGroup",
+    "ec2:DeleteSnapshot",
+    "ec2:DeleteVolume",
+    "ec2:DeregisterImage",
+    "ec2:DescribeImageAttribute",
+    "ec2:DescribeInstanceStatus",
+    "ec2:DescribeSnapshots",
+    "ec2:DetachVolume",
+    "ec2:GetPasswordData",
+    "ec2:ModifyInstanceAttribute",
+    "ec2:ModifySnapshotAttribute",
+    "ec2:RegisterImage"
+    ],
+    "Resource": [
+        "arn: {{ aws_partition }}:ec2:*::image/*",
+        "arn: {{ aws_partition }}:ec2:*::snapshot/*",
+        "arn: {{ aws_partition }}:ec2:*:: volume/*"
+    ],
+    },
+    {
+        "Sid" : "AllowEC2Management",
+        "Effect": "Allow",
+        "Action": [
+            "ec2:CreateTags",
+            "ec2:Create Image",
+            "ec2:CreateKeyPair",
+            "ec2:CreateLaunchTemplate",
+            "ec2:CreateLaunchTemplateVersion",
+            "ec2:DeleteKeyPair",
+            "ec2:DeleteLaunchTemplate",
+            "ec2:DeleteLaunchTemplateVersions",
+            "ec2:DescribeAccountAttributes",
+            "ec2:DescribeAvailabilityZones",
+            "ec2:DescribeImages",
+            "ec2:DescribeInstances",
+            "ec2:DescribeInternetGateways",
+            "ec2:DescribeKeyPairs",
+            "ec2:DescribeLaunchTemplateVersions",
+            "ec2:DescribeLaunchTemplates",
+            "ec2:DescribeNetworkInterfaces",
+            "ec2:DescribeRegions",
+            "ec2:DescribeSecurityGroups",
+            "ec2:DescribeSubnets",
+            "ec2:DescribeTags",
+            "ec2:DescribeVolumes",
+            "ec2:DescribeVpcs",
+            "ec2:DescribeVpcAttribute",
+            "ec2:ImportKeyPair",
+            "ec2:ModifyImageAttribute",
+            "ec2:ModifyLaunchTemplate",
+            "ec2:RunInstances",
+            "ec2:StopInstances",
+            "ec2:TerminateInstances"
+        ],
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowSTSUsage",
+        "Effect": "Allow",
+        "Action": "sts:GetCallerIdentity",
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowELBManagment",
+        "Effect": "Allow",
+        "Action": [
+            "elasticloadbalancing:CreateTargetGroup",
+            "elasticloadbalancing:AddTags",
+            "elasticloadbalancing:CreateListener",
+            "elasticloadbalancing:CreateLoadBalancer",
+            "elasticloadbalancing:DeleteListener",
+            "elasticloadbalancing:DeleteLoadBalancer",
+            "elasticloadbalancing:DeleteTargetGroup",
+            "elasticloadbalancing:DeschibeListeners",
+            "elasticloadbalancing:DescribeLoadBalancerAttributes",
+            "elasticloadbalancing:DescribeLoadBalancers",
+            "elasticloadbalancing:DescribeTags",
+            "elasticloadbalancing:DescribeTargetGroupAttributes",
+            "elasticloadbalancing:DescribeTargetGroups",
+            *elasticloadbalancing:DescribeTargetHealth"
+        ],
+        "Resource": "*"
+        },
+        {
+            "Sid": "AllowASGManagement",
+            "Action": [
+                "autoscaling:AttachLoadBalancerTargetGroups",
+                "autoscaling:DescribeAutoScalingGroups",
+                "autoscaling:DetachLoadBalancerTargetGroups"
+            ]
+        "Effect": "Allow",
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowIAMManagement",
+        "Effect": "Allow",
+        "Action": [
+            "iam:PassRole",
+            "iam:GetRole",
+            "iam:ListAttachedRolePolicies",
+            "iam:ListRolePolicies",
+            "iam:ListInstanceProfilesForRole",
+            "iam:CreatePolicy",
+            "iam:CreateRole",
+            "iam:GetPolicy",
+            "iam:GetPolicyVersion",
+            "iam:ListPolicyVersions",         I
+            "iam:DeletePolicyVersion",
+            "iam:DeleteRole",
+            "iam:DeletePolicy",
+            "iam:TagRole",
+            "iam:TagPolicy",
+            "iam:AttachRolePolicy",
+            "iam:DetachRolePolicy,
+            "iam:CreateInstanceProfile",
+            "iam:GetInstanceProfile",
+            "iam:DeleteInstanceProfile",
+            "iam:CreateOpenIDConnectProvider",
+            "iam:TagOpenIdConnectProvider",
+            "iam:GetOpenIdConnectProvider",
+            "iam:DeleteOpenIdConnectProvider",
+            "iam:AddRoleToInstanceProfile",
+            "iam:RemoveRoleFromInstanceProfile",
+            "iam:GetRolePolicy",
+            "iam:PutRolePolicy",
+            "iam:DeleteRolePolicy",
+            "iam:GetUser"
+        ],
+        "Resource": "*"
+    }
+    {
+        "Sid": "AllowKMSUsage"
+        "Effect": "Allow",
+        "Action": [
+            "kms:CreateGrant",
+            "kms:DescribeKey"
+        ],
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowS3Usage",
+        *Effect": "Allow",
+        "Action":
+            "s3:GetObject"
+            "S3:ListBucket"
+            ],
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowEKSUsage",
+        "Effect": "Allow",
+        "Action": [
+            "eks:AccessKubernetesApi",
+            "eks:CreateCluster",
+            "eks:CreateNodegroup",
+            "eks:DeleteNodegroup",
+            "eks:DescribeCluster",
+            "eks:DeleteCluster",
+            "eks:DescribeNodegroup",
+            "eks:ListNodegroups",
+            "eks:RegisterCluster",
+            "eks:UpdateNodegroupConfig",
+            "eks:ListClusters",
+            "eks:TagResource",
+            "eks:UpdateClusterVersion",
+            "eks:UpdateNodegroupVersion",
+            "eks:DescribeUpdate",
+            "eks:DeleteAddon",
+            "eks:DescribeAddonConfiguration",
+            "eks:DescribeAddonVersions",
+            "eks:ListAddons",
+            "eks:CreateAddon",
+            "eks:UpdateAddon",
+            "eks:DescribeAddon"
+        ],
+        "Resource": "*"
+    },
+    {
+        "Sid": "AllowNetworkManagement",
+        "Effect": "Allow",
+        "Action": [
+            "ec2:AssociateVpcCidrBlock",
+            "ec2:DisassociateVpcCidrBlock",
+            "ec2:CreateSecurityGroup",
+            "ec2:DeleteSecurityGroup",
+            "ec2:CreateSubnet",
+            "ec2:RevokeSecurityGroupEgress",
+            "ec2:RevokeSecurityGroupIngress",
+            "ec2:AuthorizeSecurityGroupIngress",
+            "ec2:DescribeSecurityGroupRules",
+            "ec2:DeleteSubnet"
+        ],
+        "Resource": "*"
+        }
+     ]
+    }
